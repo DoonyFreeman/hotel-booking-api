@@ -127,8 +127,8 @@ services:
       - "9187:9187"
     environment:
       DATA_SOURCE_URI: "booking_db:5432/booking?sslmode=disable"
-      DATA_SOURCE_USER: ${DB_USER}
-      DATA_SOURCE_PASS: ${DB_PASS}
+      DATA_SOURCE_USER: exporter
+      DATA_SOURCE_PASS: exporter_pass
     networks:
       - my-network
     depends_on:

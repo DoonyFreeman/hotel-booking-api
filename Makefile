@@ -1,4 +1,4 @@
-.PHONY: dev test lint migrate seed docker-up docker-down mon-up mon-down mon-logs dev-metrics
+.PHONY: dev test lint migrate seed docker-up docker-down docker-rebuild mon-up mon-down mon-logs dev-metrics
 
 dev:
 	uvicorn src.main:app --reload --host 0.0.0.0
@@ -37,6 +37,13 @@ mon-logs:
 	docker compose logs -f prometheus grafana postgres_exporter redis_exporter nginx_exporter
 
 dev-metrics:
-	@echo "FastAPI local (venv) + monitoring stack in Docker"
-	@echo "Run 'make dev' in another terminal, then:"
-	@echo "  docker compose up prometheus grafana postgres_exporter redis_exporter nginx_exporter -d"
+	@echo "=== Local dev with monitoring stack ==="
+	@echo ""
+	@echo "Run in separate terminals:"
+	@echo "  Terminal 1: make dev               # FastAPI на localhost:8000"
+	@echo "  Terminal 2: make mon-up            # мониторинг в Docker"
+	@echo ""
+	@echo "Prometheus будет скрапить booking_back:8000 (Docker mode)."
+	@echo "Для локального режима нужно указать target host.docker.internal:8000:"
+	@echo "  cp prometheus/prometheus-local.yml prometheus/prometheus.yml"
+	@echo "  docker compose up prometheus grafana ... -d"

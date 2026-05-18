@@ -202,3 +202,176 @@ facilities (id, title)
 ```
 
 M2M: `rooms` ↔ `facilities` через `rooms_facilities`.
+
+---
+
+## Мониторинг (Prometheus + Grafana)
+
+FastAPI автоматически экспортирует метрики на `/metrics`. Prometheus собирает их
+вместе с метриками PostgreSQL, Redis и Nginx. Grafana визуализирует дашборды.
+
+```
+                          ┌──────────────┐
+                          │   Grafana    │
+                          │   :3000      │
+                          └──────┬───────┘
+                                 │ queries
+                          ┌──────▼───────┐
+                          │  Prometheus  │
+                          │  :9090       │
+                          └──┬──┬──┬─────┘
+                             │  │  │
+                  scrape     │  │  │
+      ┌──────────────────────┘  │  └─────────────────────┐
+      │                         │                        │
+   ┌──▼──────────┐   ┌─────────▼────┐   ┌───────────────▼──┐
+   │  FastAPI    │   │  postgres    │   │   redis         │
+   │  /metrics   │   │  _exporter   │   │   _exporter     │
+   │  :8000      │   │  :9187       │   │   :9121         │
+   └─────────────┘   └──────────────┘   └──────────────────┘
+```
+
+### Port Mapping
+
+| Сервис | Внутренний порт | Внешний порт |
+|---|---|---|
+| FastAPI (напрямую) | 8000 | 7777 |
+| Nginx | 80 | 80 |
+| Prometheus | 9090 | 9090 |
+| Grafana | 3000 | 3000 |
+| Alertmanager | 9093 | 9093 |
+| Postgres Exporter | 9187 | 9187 |
+| Redis Exporter | 9121 | 9121 |
+| Nginx Exporter | 9113 | 9113 |
+
+### Запуск мониторинга
+
+#### Docker (все сервисы, рекомендуется)
+
+Всё уже в `docker compose up` — Prometheus, Grafana, Alertmanager и экспортеры
+запускаются вместе с API. Открой:
+
+| Ссылка | Описание |
+|--------|----------|
+| http://localhost:3000 | Grafana (admin / admin) |
+| http://localhost:9090 | Prometheus |
+| http://localhost:7777/docs | API напрямую |
+| http://localhost:80/docs | API через Nginx |
+
+#### Локально (venv + Docker)
+
+FastAPI в `venv`, мониторинг в Docker:
+
+```bash
+# Терминал 1:
+make dev                                   # FastAPI на localhost:8000
+
+# Терминал 2:
+make mon-up                                # Prometheus + Grafana + экспортеры
+```
+
+Prometheus скрапит `host.docker.internal:8000`. При первом запуске убедись,
+что в `prometheus/prometheus.yml` target = `['host.docker.internal:8000']`.
+
+```bash
+make dev-metrics                            # подсказка
+cp prometheus/prometheus-local.yml prometheus/prometheus.yml  # переключить
+make mon-up
+```
+
+### Дашборды
+
+#### `FastAPI Metrics` — http://localhost:3000/d/fastapi-metrics
+
+![FastAPI Dashboard](grafana/screenshots/fastapi_dashboard.png)
+
+| Панель | Что показывает | PromQL |
+|--------|---------------|--------|
+| **RPS** | Запросов в секунду по эндпоинтам | `rate(http_requests_total[1m])` |
+| **P50 / P95 / P99 Latency** | Задержка запросов (50-й, 95-й, 99-й перцентиль) | `histogram_quantile(0.5/0.95/0.99, rate(http_request_duration_seconds_bucket[5m]))` |
+| **Status Codes** | Распределение 2xx, 4xx, 5xx | `http_requests_total{status=~"2.."}` и т.д. |
+| **Active Requests** | Текущие активные запросы | `http_requests_in_progress` |
+| **Business** | Созданные бронирования, зарегистрированные пользователи | `bookings_created_total`, `users_registered_total` |
+
+**P50 / P95 / P99 — что это значит:**
+- **P50 (медиана)** — типичная задержка. Половина запросов быстрее, половина — медленнее.
+- **P95** — 95% запросов быстрее этого значения. Стабильность системы для большинства пользователей.
+- **P99** — 99% запросов быстрее. Выявляет выбросы — 1 из 100 запросов аномально медленный.
+
+Если P50 = 50ms, P95 = 200ms, P99 = 2s — в среднем всё хорошо, но 1% запросов
+тормозит. Резкий рост P99 без роста P50 часто указывает на проблемы с БД, Redis
+или GC паузы.
+
+#### `DDoS / Security` — http://localhost:3000/d/ddos-security
+
+![DDoS Dashboard](grafana/screenshots/ddos_dashboard.png)
+
+| Панель | Что показывает | PromQL |
+|--------|---------------|--------|
+| **RPS Timeline** | Общий RPS + порог (1000 req/s) | `sum(rate(http_requests_total[1m]))` |
+| **Error Rate** | Доля 5xx от всех запросов + порог (5%) | `sum(rate(...{status=~"5.."})) / sum(rate(...))` |
+| **P95 Latency** | P95 задержка + порог (2s) | `histogram_quantile(0.95, ...)` |
+| **Nginx Connections** | Активные соединения Nginx + порог (500) | `nginx_connections_active` |
+| **Top Endpoints** | Топ-10 эндпоинтов по нагрузке | `topk(10, sum by (path) (rate(...)))` |
+
+### Alerting (Prometheus Alertmanager)
+
+4 правила алертинга для автоматического обнаружения DDoS и проблем:
+
+| Alert | Выражение | Severity |
+|-------|-----------|----------|
+| HighRequestRate | RPS > 1000 за 1 мин | warning |
+| LatencySpike | P95 latency > 2s за 2 мин | warning |
+| HighErrorRate | 5xx > 5% за 2 мин | critical |
+| NginxConnSpike | nginx_connections_active > 500 | warning |
+
+Проверить активные алерты:
+
+```bash
+curl http://localhost:9090/api/v1/alerts
+curl http://localhost:9093/api/v2/alerts
+```
+
+### Бизнес-метрики
+
+В коде инкрементятся кастомные счётчики:
+
+| Метрика | Где инкрементится | Метки |
+|---------|------------------|-------|
+| `bookings_created_total` | `services/bookings.py:add_booking` | `hotel_id` |
+| `bookings_cancelled_total` | `services/bookings.py:cancel_booking` | — |
+| `users_registered_total` | `services/auth.py:register_user` | — |
+
+### Docker Compose Services (полный список)
+
+| Контейнер | Образ | Назначение |
+|-----------|-------|------------|
+| `booking_db` | postgres:16 | База данных |
+| `booking_cache` | redis:7.4 | Кэш + Celery broker |
+| `booking_back` | booking_back FastAPI | API (uvicorn) |
+| `booking_nginx` | nginx:latest | Reverse proxy + rate limiting |
+| `booking_celery_worker` | booking_back | Celery worker (ресайз изображений) |
+| `booking_celery_beat` | booking_back | Celery beat (периодические задачи) |
+| `booking_prometheus` | prom/prometheus | Сбор метрик |
+| `booking_alertmanager` | prom/alertmanager | Alerting |
+| `booking_grafana` | grafana/grafana | Визуализация |
+| `booking_pg_exporter` | prometheuscommunity/postgres-exporter | Метрики PostgreSQL |
+| `booking_redis_exporter` | oliver006/redis_exporter | Метрики Redis |
+| `booking_nginx_exporter` | nginx/nginx-prometheus-exporter | Метрики Nginx |
+
+### Makefile таргеты для мониторинга
+
+```bash
+make mon-up        # Запустить Prometheus + Grafana + экспортеры + Alertmanager
+make mon-down      # Остановить мониторинг
+make mon-logs      # Логи мониторинга
+make dev-metrics   # Подсказка для локального сценария
+```
+
+### Безопасность
+
+- `/metrics` **закрыт через Nginx** (HTTP 403 снаружи) — доступен только внутри Docker сети
+  напрямую к FastAPI (`booking_back:8000`)
+- `/nginx-status` закрыт по `allow/deny` — только Docker подсеть
+- Prometheus и Grafana не публикуются в production (сейчас открыты для отладки)
+- Postgres exporter использует read-only пользователя `exporter` с `pg_read_all_stats`

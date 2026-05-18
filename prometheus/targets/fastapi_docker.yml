@@ -1,0 +1,3 @@
+- targets: ['booking_back:8000']
+  labels:
+    env: docker

@@ -1,0 +1,43 @@
+groups:
+  - name: ddos_detection
+    interval: 30s
+    rules:
+      - alert: HighRequestRate
+        expr: sum(rate(http_requests_total[1m])) > 1000
+        for: 1m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High request rate detected"
+          description: "Total RPS is {{ $value | humanize }}. Threshold: 1000 req/s"
+
+      - alert: LatencySpike
+        expr: histogram_quantile(0.95, rate(http_request_duration_seconds_bucket[5m])) > 2
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "P95 latency spike detected"
+          description: "P95 latency is {{ $value | humanize }}s. Threshold: 2s"
+
+      - alert: HighErrorRate
+        expr: |
+          sum(rate(http_requests_total{status=~"5.."}[5m]))
+          /
+          sum(rate(http_requests_total[5m]))
+          > 0.05
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "High error rate detected"
+          description: "5xx rate is {{ $value | humanizePercentage }}. Threshold: 5%"
+
+      - alert: NginxConnSpike
+        expr: nginx_connections_active > 500
+        for: 1m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Nginx connection spike"
+          description: "Active connections: {{ $value }}. Threshold: 500"

@@ -28,13 +28,13 @@ docker-rebuild:
 	docker compose down && docker compose up --build
 
 mon-up:
-	docker compose up prometheus grafana postgres_exporter redis_exporter nginx_exporter -d
+	docker compose up alertmanager prometheus grafana postgres_exporter redis_exporter nginx_exporter -d
 
 mon-down:
-	docker compose down prometheus grafana postgres_exporter redis_exporter nginx_exporter
+	docker compose down alertmanager prometheus grafana postgres_exporter redis_exporter nginx_exporter
 
 mon-logs:
-	docker compose logs -f prometheus grafana postgres_exporter redis_exporter nginx_exporter
+	docker compose logs -f alertmanager prometheus grafana postgres_exporter redis_exporter nginx_exporter
 
 dev-metrics:
 	@echo "=== Local dev with monitoring stack ==="

@@ -3,6 +3,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.openapi.docs import get_swagger_ui_html
+from prometheus_fastapi_instrumentator import Instrumentator
 import uvicorn
 
 from fastapi_cache import FastAPICache
@@ -40,6 +41,8 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(docs_url=None, lifespan=lifespan)
+
+Instrumentator().instrument(app).expose(app)
 
 app.add_middleware(
     CORSMiddleware,

@@ -11,6 +11,7 @@ from src.exceptions import (
     ObjectAlreadyExistsException,
     UserAlreadyExistsException,
 )
+from src.metrics import USERS_REGISTERED
 from src.schemas.users import UserRequestAdd, UserAdd
 from src.services.base import BaseService
 
@@ -47,6 +48,7 @@ class AuthService(BaseService):
         try:
             await self.db.users.add(new_user_data)
             await self.db.commit()
+            USERS_REGISTERED.inc()
         except ObjectAlreadyExistsException:
             raise UserAlreadyExistsException
 

@@ -8,6 +8,7 @@ from src.exceptions import (
     HotelNotFoundException,
     AllRoomsAreBookedException,
 )
+from src.metrics import BOOKINGS_CREATED
 
 
 class BookingService(BaseService):
@@ -38,5 +39,6 @@ class BookingService(BaseService):
             booking = await self.db.bookings.add_booking(_booking_data, hotel_id=hotel.id)
         except AllRoomsAreBookedException:
             raise AllRoomsAreBookedException
+        BOOKINGS_CREATED.labels(hotel_id=str(hotel.id)).inc()
         await self.db.commit()
         return booking

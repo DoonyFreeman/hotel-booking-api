@@ -8,6 +8,7 @@ from src.exceptions import (
     RoomNotFoundException,
     HotelNotFoundException,
     AllRoomsAreBookedException,
+    BookingNotFoundException,
 )
 from src.services.bookings import BookingService
 
@@ -35,3 +36,12 @@ async def add_booking(user_id: UserIdDep, db: DBDep, booking_data: BookingAddReq
     except AllRoomsAreBookedException:
         raise AllRoomsAreBookedHTTPException
     return {"status": "OK", "data": booking}
+
+
+@router.delete("/{booking_id}")
+async def cancel_booking(user_id: UserIdDep, booking_id: int, db: DBDep):
+    try:
+        await BookingService(db).cancel_booking(user_id, booking_id)
+    except BookingNotFoundException:
+        raise BookingNotFoundException
+    return {"status": "OK"}

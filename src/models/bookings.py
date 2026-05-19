@@ -2,7 +2,7 @@ from sqlalchemy.ext.hybrid import hybrid_property
 from datetime import date
 from src.database import Base
 from sqlalchemy.orm import Mapped, mapped_column
-from sqlalchemy import ForeignKey
+from sqlalchemy import ForeignKey, Boolean
 
 
 class BookingsOrm(Base):
@@ -14,6 +14,7 @@ class BookingsOrm(Base):
     date_from: Mapped[date]
     date_to: Mapped[date]
     price: Mapped[int]
+    is_cancelled: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
 
     @hybrid_property
     def total_cost(self) -> int:

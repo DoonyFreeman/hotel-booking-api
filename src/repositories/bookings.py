@@ -1,5 +1,5 @@
 from datetime import date
-from sqlalchemy import select
+from sqlalchemy import select, update
 
 from src.repositories.base import BaseRepository
 from src.models import BookingsOrm
@@ -31,5 +31,14 @@ class BookingsRepository(BaseRepository):
         if data.room_id in rooms_ids_to_book:
             new_booking = await self.add(data)
             return new_booking
-        
+
         raise AllRoomsAreBookedException
+
+    async def cancel_booking(self, booking_id: int, user_id: int) -> bool:
+        stmt = (
+            update(BookingsOrm)
+            .where(BookingsOrm.id == booking_id, BookingsOrm.user_id == user_id, BookingsOrm.is_cancelled.is_(False))
+            .values(is_cancelled=True)
+        )
+        result = await self.session.execute(stmt)
+        return result.rowcount > 0

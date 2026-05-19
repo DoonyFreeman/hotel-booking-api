@@ -7,8 +7,9 @@ from src.exceptions import (
     RoomNotFoundException,
     HotelNotFoundException,
     AllRoomsAreBookedException,
+    BookingNotFoundException,
 )
-from src.metrics import BOOKINGS_CREATED
+from src.metrics import BOOKINGS_CREATED, BOOKINGS_CANCELLED
 
 
 class BookingService(BaseService):
@@ -42,3 +43,10 @@ class BookingService(BaseService):
         BOOKINGS_CREATED.labels(hotel_id=str(hotel.id)).inc()
         await self.db.commit()
         return booking
+
+    async def cancel_booking(self, user_id: int, booking_id: int):
+        cancelled = await self.db.bookings.cancel_booking(booking_id, user_id)
+        if not cancelled:
+            raise BookingNotFoundException
+        BOOKINGS_CANCELLED.inc()
+        await self.db.commit()

@@ -1,3 +1,5 @@
 .venv
 .env
 AGENTS.md
+prometheus-data/
+grafana-data/

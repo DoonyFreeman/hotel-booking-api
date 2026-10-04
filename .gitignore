@@ -2,4 +2,6 @@
 .env
 AGENTS.md
 prometheus-data/
-grafana-data/
+grafana-data/__pycache__/
+*.pyc
+.DS_Store
